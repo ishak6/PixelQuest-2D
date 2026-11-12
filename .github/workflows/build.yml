@@ -1,0 +1,45 @@
+name: Pixel Quest Builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Godot 4.4.1
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: true
+
+      - name: Validate project and import resources
+        run: godot --headless --editor --path . --quit
+
+      - name: Smoke test startup
+        run: timeout 20s godot --headless --path . --quit-after 5
+
+      - name: Export Web build
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+
+      - name: Export Android APK
+        run: |
+          mkdir -p build/android
+          godot --headless --path . --export-release "Android" build/android/PixelQuest.apk
+
+      - name: Upload Website and APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-quest-web-and-android
+          path: |
+            build/web/
+            build/android/PixelQuest.apk
+          if-no-files-found: warn
