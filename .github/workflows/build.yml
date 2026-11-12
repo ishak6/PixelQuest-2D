@@ -44,10 +44,17 @@ jobs:
           mkdir -p build/web
           godot --headless --path . --export-release "Web" build/web/index.html
 
+      - name: Create CI debug keystore
+        run: |
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/pixelquest-debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/pixelquest-debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
       - name: Export Android APK
         run: |
           mkdir -p build/android
-          godot --headless --path . --export-release "Android" build/android/PixelQuest.apk
+          godot --headless --verbose --path . --export-release "Android" build/android/PixelQuest.apk
 
       - name: Upload Website and APK
         uses: actions/upload-artifact@v4
