@@ -247,6 +247,7 @@ func _on_crumble_touched(body: Node2D) -> void:
     if body == player and not collapsed:
         collapsed = true
         collapse_timer = 0.35
+        player.controls_enabled = false
         _show_message("THE FLOOR WASN'T SAFE!", 1.0)
         _play_tone(170.0, 0.13)
 
