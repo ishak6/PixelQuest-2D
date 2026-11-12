@@ -233,8 +233,7 @@ func _touch_button(caption: String, pos: Vector2, action: String, _hold: bool) -
     ui_layer.add_child(button)
 
 func _spawn_player() -> void:
-    player = CharacterBody2D.new() as PQPlayer
-    player.set_script(PLAYER_SCRIPT)
+    player = PLAYER_SCRIPT.new() as PQPlayer
     player.position = Vector2(70, FLOOR_Y - 45)
     var collision := CollisionShape2D.new()
     var shape := RectangleShape2D.new()
