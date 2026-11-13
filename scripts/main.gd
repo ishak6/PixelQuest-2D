@@ -16,6 +16,10 @@ var moving_direction := 1.0
 var moving_start_x := 520.0
 var moving_end_x := 690.0
 var ui_layer: CanvasLayer
+var game_camera: Camera2D
+var level_background: ColorRect
+var hud_panel: ColorRect
+var utility_buttons: Dictionary = {}
 var death_label: Label
 var message_label: Label
 var left_held := false
@@ -33,11 +37,39 @@ var control_config := ConfigFile.new()
 var touch_points: Dictionary = {}
 
 func _ready() -> void:
+    _configure_viewport()
+    get_viewport().size_changed.connect(_on_viewport_resized)
     _setup_input()
     _build_level()
     _build_ui()
     _spawn_player()
     _show_message("THE FAKE BEGINNING  •  Reach the door. Trust nothing.", 3.5)
+
+func _configure_viewport() -> void:
+    game_camera = Camera2D.new()
+    game_camera.position = Vector2(WORLD_W * 0.5, 270.0)
+    game_camera.enabled = true
+    add_child(game_camera)
+    _fit_camera_to_scene()
+
+func _on_viewport_resized() -> void:
+    _fit_camera_to_scene()
+    _layout_ui()
+    _refresh_touch_controls()
+
+func _fit_camera_to_scene() -> void:
+    if not is_instance_valid(game_camera):
+        return
+    var viewport_size := get_viewport().get_visible_rect().size
+    if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+        return
+    var zoom_factor: float = minf(viewport_size.x / WORLD_W, viewport_size.y / 540.0)
+    zoom_factor = maxf(zoom_factor, 0.1)
+    game_camera.zoom = Vector2(zoom_factor, zoom_factor)
+    if is_instance_valid(level_background):
+        var visible_world_size := viewport_size / zoom_factor
+        level_background.position = game_camera.position - visible_world_size * 0.5
+        level_background.size = visible_world_size
 
 func _process(delta: float) -> void:
     if Input.is_action_just_pressed("restart"):
@@ -116,11 +148,11 @@ func _bind_key(action: String, key: Key) -> void:
 
 func _build_level() -> void:
     # Background and decorative clouds.
-    var bg := ColorRect.new()
-    bg.color = Color("#91d7ef")
-    bg.size = Vector2(WORLD_W, 540)
-    bg.z_index = -20
-    add_child(bg)
+    level_background = ColorRect.new()
+    level_background.color = Color("#91d7ef")
+    level_background.size = Vector2(WORLD_W, 540)
+    level_background.z_index = -20
+    add_child(level_background)
     _draw_cloud(Vector2(170, 95))
     _draw_cloud(Vector2(650, 125))
     _draw_cloud(Vector2(835, 75))
@@ -245,11 +277,12 @@ func _build_ui() -> void:
     ui_layer = CanvasLayer.new()
     add_child(ui_layer)
     var panel := ColorRect.new()
-    panel.position = Vector2(16, 14)
-    panel.size = Vector2(205, 42)
-    panel.color = Color("#26324a")
-    panel.modulate.a = 0.9
-    ui_layer.add_child(panel)
+    hud_panel = ColorRect.new()
+    hud_panel.position = Vector2(16, 14)
+    hud_panel.size = Vector2(205, 42)
+    hud_panel.color = Color("#26324a")
+    hud_panel.modulate.a = 0.9
+    ui_layer.add_child(hud_panel)
     death_label = Label.new()
     death_label.position = Vector2(28, 20)
     death_label.text = "LEVEL 01   •   DEATHS 0"
@@ -275,24 +308,79 @@ func _build_ui() -> void:
     edit_button.size = Vector2(64, 42)
     edit_button.pressed.connect(_toggle_control_editor)
     ui_layer.add_child(edit_button)
+    utility_buttons["edit"] = edit_button
     var smaller := Button.new()
     smaller.text = "A−"
     smaller.position = Vector2(770, 14)
     smaller.size = Vector2(42, 42)
     smaller.pressed.connect(func(): _resize_selected_control(-8.0))
     ui_layer.add_child(smaller)
+    utility_buttons["smaller"] = smaller
     var larger := Button.new()
     larger.text = "A+"
     larger.position = Vector2(818, 14)
     larger.size = Vector2(42, 42)
     larger.pressed.connect(func(): _resize_selected_control(8.0))
     ui_layer.add_child(larger)
+    utility_buttons["larger"] = larger
     var restart_button := Button.new()
     restart_button.text = "↻"
     restart_button.position = Vector2(866, 14)
     restart_button.size = Vector2(48, 42)
     restart_button.pressed.connect(_restart_level)
     ui_layer.add_child(restart_button)
+    utility_buttons["restart"] = restart_button
+    _layout_ui()
+
+func _layout_ui() -> void:
+    if not is_instance_valid(ui_layer):
+        return
+    var viewport_size := get_viewport().get_visible_rect().size
+    var w: float = viewport_size.x
+    var h: float = viewport_size.y
+    var compact: bool = w < 700.0
+    if is_instance_valid(hud_panel):
+        hud_panel.position = Vector2(12, 12)
+        hud_panel.size = Vector2(205, 42)
+    if is_instance_valid(death_label):
+        death_label.position = Vector2(24, 18)
+    if is_instance_valid(message_label):
+        message_label.position = Vector2(12, 62 if compact else 14)
+        message_label.size = Vector2(maxf(100.0, w - 24.0), 38)
+        message_label.add_theme_font_size_override("font_size", 14 if compact else 17)
+    var top_y: float = 66.0 if compact else 12.0
+    var button_h: float = 38.0 if compact else 42.0
+    var restart_w: float = 44.0
+    var edit_w: float = 58.0 if compact else 64.0
+    var small_w: float = 38.0 if compact else 42.0
+    var gap: float = 5.0
+    var right_edge: float = w - 12.0
+    var restart_button: Button = utility_buttons["restart"]
+    var larger: Button = utility_buttons["larger"]
+    var smaller: Button = utility_buttons["smaller"]
+    var edit_button: Button = utility_buttons["edit"]
+    restart_button.size = Vector2(restart_w, button_h)
+    restart_button.position = Vector2(right_edge - restart_w, top_y)
+    larger.size = Vector2(small_w, button_h)
+    larger.position = Vector2(restart_button.position.x - gap - small_w, top_y)
+    smaller.size = Vector2(small_w, button_h)
+    smaller.position = Vector2(larger.position.x - gap - small_w, top_y)
+    edit_button.size = Vector2(edit_w, button_h)
+    edit_button.position = Vector2(smaller.position.x - gap - edit_w, top_y)
+    var control_size: float = clampf(minf(w, h) * 0.16, 64.0, 92.0)
+    var bottom_y: float = h - control_size - 18.0
+    if control_buttons.has("move_left"):
+        var left_button: Button = control_buttons["move_left"]
+        left_button.size = Vector2(control_size, control_size)
+        left_button.position = Vector2(18.0, bottom_y)
+    if control_buttons.has("move_right"):
+        var right_button: Button = control_buttons["move_right"]
+        right_button.size = Vector2(control_size, control_size)
+        right_button.position = Vector2(28.0 + control_size, bottom_y)
+    if control_buttons.has("jump"):
+        var jump_button: Button = control_buttons["jump"]
+        jump_button.size = Vector2(control_size, control_size)
+        jump_button.position = Vector2(w - control_size - 18.0, bottom_y)
 
 func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     var button := Button.new()
