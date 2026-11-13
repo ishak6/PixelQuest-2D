@@ -11,6 +11,7 @@ var controls_enabled := true
 var facing := 1
 var move_input := 0.0
 var jump_requested := false
+var touch_control_active := false
 
 func _physics_process(delta: float) -> void:
     if not controls_enabled:
@@ -18,7 +19,7 @@ func _physics_process(delta: float) -> void:
         return
 
     var keyboard_direction := Input.get_axis("move_left", "move_right")
-    var direction := move_input if move_input != 0.0 else keyboard_direction
+    var direction := move_input if touch_control_active else keyboard_direction
     if direction != 0.0:
         facing = sign(direction)
     velocity.x = direction * SPEED
