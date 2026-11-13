@@ -6,21 +6,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pixel-quest-pages
+  group: pixel-quest-build
   cancel-in-progress: true
 
 jobs:
   website:
-    name: Build and deploy Website
+    name: Build and publish Website
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,11 +26,6 @@ jobs:
           version: 4.4.1
           use-dotnet: false
           include-templates: true
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Validate project and import resources
         run: godot --headless --editor --path . --quit
@@ -49,14 +39,21 @@ jobs:
           godot --headless --path . --export-release "Web" build/web/index.html
           test -s build/web/index.html
 
-      - name: Upload Website artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish Website to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: build/web
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: build/web
+          force_orphan: true
 
-      - name: Deploy Website to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Upload Website build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-quest-website
+          path: build/web
+          if-no-files-found: error
+          retention-days: 30
 
   android:
     name: Build standalone Android APK
@@ -89,7 +86,7 @@ jobs:
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses
+          yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
 
       - name: Configure Godot Android SDK paths
