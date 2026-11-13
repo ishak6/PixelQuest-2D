@@ -22,6 +22,14 @@ var left_held := false
 var right_held := false
 var jump_held := false
 var audio_player: AudioStreamPlayer
+var control_buttons: Dictionary = {}
+var control_positions: Dictionary = {}
+var control_sizes: Dictionary = {}
+var control_edit_mode := false
+var selected_control := ""
+var dragging_control := ""
+var drag_offset := Vector2.ZERO
+var control_config := ConfigFile.new()
 
 func _ready() -> void:
     _setup_input()
@@ -48,6 +56,7 @@ func _process(delta: float) -> void:
 func _physics_process(_delta: float) -> void:
     if not is_instance_valid(player):
         return
+    player.move_input = float(right_held) - float(left_held)
     if player.global_position.y > 650:
         _player_died()
     if player.global_position.x > 910 and player.global_position.y < 460:
@@ -223,9 +232,28 @@ func _build_ui() -> void:
     message_label.add_theme_color_override("font_color", Color("#26324a"))
     ui_layer.add_child(message_label)
 
-    _touch_button("◀", Vector2(24, 430), "move_left", true)
-    _touch_button("▶", Vector2(112, 430), "move_right", true)
-    _touch_button("JUMP", Vector2(810, 420), "jump", true)
+    _load_control_layout()
+    _touch_button("◀", Vector2(24, 430), "move_left")
+    _touch_button("▶", Vector2(112, 430), "move_right")
+    _touch_button("JUMP", Vector2(810, 420), "jump")
+    var edit_button := Button.new()
+    edit_button.text = "EDIT"
+    edit_button.position = Vector2(735, 14)
+    edit_button.size = Vector2(68, 42)
+    edit_button.pressed.connect(_toggle_control_editor)
+    ui_layer.add_child(edit_button)
+    var smaller := Button.new()
+    smaller.text = "A−"
+    smaller.position = Vector2(810, 14)
+    smaller.size = Vector2(48, 42)
+    smaller.pressed.connect(func(): _resize_selected_control(-8.0))
+    ui_layer.add_child(smaller)
+    var larger := Button.new()
+    larger.text = "A+"
+    larger.position = Vector2(864, 14)
+    larger.size = Vector2(48, 42)
+    larger.pressed.connect(func(): _resize_selected_control(8.0))
+    ui_layer.add_child(larger)
     var restart_button := Button.new()
     restart_button.text = "↻"
     restart_button.position = Vector2(890, 16)
@@ -233,15 +261,91 @@ func _build_ui() -> void:
     restart_button.pressed.connect(_restart_level)
     ui_layer.add_child(restart_button)
 
-func _touch_button(caption: String, pos: Vector2, action: String, _hold: bool) -> void:
+func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     var button := Button.new()
     button.text = caption
-    button.position = pos
-    button.size = Vector2(76, 76)
-    button.add_theme_font_size_override("font_size", 23)
-    button.button_down.connect(func(): Input.action_press(action))
-    button.button_up.connect(func(): Input.action_release(action))
+    button.position = control_positions.get(action, pos)
+    var button_size: float = control_sizes.get(action, 76.0)
+    button.size = Vector2(button_size, button_size)
+    button.add_theme_font_size_override("font_size", 23 if action != "jump" else 18)
+    button.focus_mode = Control.FOCUS_NONE
+    button.button_down.connect(func(): _set_touch_action(action, true))
+    button.button_up.connect(func(): _set_touch_action(action, false))
+    button.gui_input.connect(_on_control_gui_input.bind(button, action))
+    control_buttons[action] = button
     ui_layer.add_child(button)
+
+func _set_touch_action(action: String, pressed: bool) -> void:
+    if control_edit_mode:
+        return
+    match action:
+        "move_left":
+            left_held = pressed
+        "move_right":
+            right_held = pressed
+        "jump":
+            if pressed and not jump_held and is_instance_valid(player):
+                player.jump_requested = true
+            jump_held = pressed
+
+func _toggle_control_editor() -> void:
+    control_edit_mode = not control_edit_mode
+    left_held = false
+    right_held = false
+    jump_held = false
+    selected_control = ""
+    dragging_control = ""
+    for action in control_buttons:
+        var button: Button = control_buttons[action]
+        button.modulate = Color(1.0, 0.82, 0.45, 1.0) if control_edit_mode else Color.WHITE
+    _show_message("DRAG BUTTONS • SELECT ONE, THEN USE A− / A+ • EDIT TO SAVE" if control_edit_mode else "CONTROLS SAVED", 2.5)
+    if not control_edit_mode:
+        _save_control_layout()
+
+func _resize_selected_control(amount: float) -> void:
+    if not control_edit_mode or selected_control == "":
+        return
+    var button: Button = control_buttons[selected_control]
+    var new_size: float = clampf(button.size.x + amount, 44.0, 150.0)
+    button.size = Vector2(new_size, new_size)
+    control_sizes[selected_control] = new_size
+    _save_control_layout()
+
+func _on_control_gui_input(event: InputEvent, button: Button, action: String) -> void:
+    if not control_edit_mode:
+        return
+    if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        if event.pressed:
+            selected_control = action
+            dragging_control = action
+            drag_offset = button.position - get_viewport().get_mouse_position()
+        elif dragging_control == action:
+            dragging_control = ""
+            _save_control_layout()
+        button.accept_event()
+    elif event is InputEventMouseMotion and dragging_control == action:
+        var viewport_size := get_viewport().get_visible_rect().size
+        var new_pos := get_viewport().get_mouse_position() + drag_offset
+        button.position = Vector2(clampf(new_pos.x, 0.0, viewport_size.x - button.size.x), clampf(new_pos.y, 0.0, viewport_size.y - button.size.y))
+        control_positions[action] = button.position
+        button.accept_event()
+
+func _load_control_layout() -> void:
+    control_config.load("user://pixel_quest_controls.cfg")
+    for action in ["move_left", "move_right", "jump"]:
+        var saved_position = control_config.get_value("controls", action + "_position", null)
+        if saved_position is Vector2:
+            control_positions[action] = saved_position
+        control_sizes[action] = float(control_config.get_value("controls", action + "_size", 76.0))
+
+func _save_control_layout() -> void:
+    for action in control_buttons:
+        var button: Button = control_buttons[action]
+        control_positions[action] = button.position
+        control_sizes[action] = button.size.x
+        control_config.set_value("controls", action + "_position", button.position)
+        control_config.set_value("controls", action + "_size", button.size.x)
+    control_config.save("user://pixel_quest_controls.cfg")
 
 func _spawn_player() -> void:
     player = PLAYER_SCRIPT.new() as PQPlayer
@@ -286,6 +390,9 @@ func _player_died() -> void:
     _restart_level(false)
 
 func _restart_level(reset_deaths := false) -> void:
+    left_held = false
+    right_held = false
+    jump_held = false
     if reset_deaths:
         deaths = 0
     if is_instance_valid(player):
