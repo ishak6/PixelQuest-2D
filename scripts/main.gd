@@ -431,8 +431,6 @@ func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     button.focus_mode = Control.FOCUS_NONE
     button.mouse_filter = Control.MOUSE_FILTER_STOP
     _style_touch_button(button, action)
-    button.button_down.connect(func(): _set_touch_action(action, true))
-    button.button_up.connect(func(): _set_touch_action(action, false))
     button.gui_input.connect(_on_control_gui_input.bind(button, action))
     control_buttons[action] = button
     ui_layer.add_child(button)
@@ -508,6 +506,9 @@ func _resize_selected_control(amount: float) -> void:
 
 func _on_control_gui_input(event: InputEvent, button: Button, action: String) -> void:
     if not control_edit_mode:
+        if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+            _set_touch_action(action, event.pressed)
+            button.accept_event()
         return
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
