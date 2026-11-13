@@ -558,7 +558,7 @@ func _spawn_player() -> void:
     player.modulate = Color.WHITE
     var collision := CollisionShape2D.new()
     var shape := RectangleShape2D.new()
-    shape.size = Vector2(18, 27)
+    shape.size = Vector2(22, 36)
     collision.shape = shape
     player.add_child(collision)
     player.died.connect(_player_died)
