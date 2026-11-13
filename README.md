@@ -21,6 +21,8 @@ Open `project.godot` in Godot 4.4.1 and press Play.
 
 ### Website
 
+**Play Pixel Quest:** https://ishak6.github.io/PixelQuest-2D/
+
 - GitHub Actions exports the Godot Web build.
 - The website is deployed to GitHub Pages.
 - It runs in a compatible modern browser; no Android APK is needed.
