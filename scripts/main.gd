@@ -30,6 +30,7 @@ var selected_control := ""
 var dragging_control := ""
 var drag_offset := Vector2.ZERO
 var control_config := ConfigFile.new()
+var touch_points: Dictionary = {}
 
 func _ready() -> void:
     _setup_input()
@@ -57,10 +58,42 @@ func _physics_process(_delta: float) -> void:
     if not is_instance_valid(player):
         return
     player.move_input = float(right_held) - float(left_held)
+    player.touch_control_active = left_held or right_held or jump_held
     if player.global_position.y > 650:
         _player_died()
     if player.global_position.x > 910 and player.global_position.y < 460:
         _win_level()
+
+func _input(event: InputEvent) -> void:
+    # Track each finger independently for simultaneous Android touch controls.
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            touch_points[event.index] = event.position
+        else:
+            touch_points.erase(event.index)
+        _refresh_touch_controls()
+    elif event is InputEventScreenDrag and touch_points.has(event.index):
+        touch_points[event.index] = event.position
+        _refresh_touch_controls()
+
+func _refresh_touch_controls() -> void:
+    var active_actions := {"move_left": false, "move_right": false, "jump": false}
+    for point in touch_points.values():
+        for action in control_buttons:
+            var button: Button = control_buttons[action]
+            if button.get_global_rect().has_point(point):
+                active_actions[action] = true
+    var any_control_active: bool = active_actions["move_left"] or active_actions["move_right"] or active_actions["jump"]
+    if control_edit_mode:
+        any_control_active = false
+    left_held = active_actions["move_left"] and not control_edit_mode
+    right_held = active_actions["move_right"] and not control_edit_mode
+    var next_jump: bool = active_actions["jump"] and not control_edit_mode
+    if next_jump and not jump_held and is_instance_valid(player):
+        player.jump_requested = true
+    jump_held = next_jump
+    if is_instance_valid(player):
+        player.touch_control_active = any_control_active
 
 func _setup_input() -> void:
     for action in ["move_left", "move_right", "jump", "restart"]:
@@ -238,26 +271,26 @@ func _build_ui() -> void:
     _touch_button("JUMP", Vector2(810, 420), "jump")
     var edit_button := Button.new()
     edit_button.text = "EDIT"
-    edit_button.position = Vector2(735, 14)
-    edit_button.size = Vector2(68, 42)
+    edit_button.position = Vector2(700, 14)
+    edit_button.size = Vector2(64, 42)
     edit_button.pressed.connect(_toggle_control_editor)
     ui_layer.add_child(edit_button)
     var smaller := Button.new()
     smaller.text = "A−"
-    smaller.position = Vector2(810, 14)
-    smaller.size = Vector2(48, 42)
+    smaller.position = Vector2(770, 14)
+    smaller.size = Vector2(42, 42)
     smaller.pressed.connect(func(): _resize_selected_control(-8.0))
     ui_layer.add_child(smaller)
     var larger := Button.new()
     larger.text = "A+"
-    larger.position = Vector2(864, 14)
-    larger.size = Vector2(48, 42)
+    larger.position = Vector2(818, 14)
+    larger.size = Vector2(42, 42)
     larger.pressed.connect(func(): _resize_selected_control(8.0))
     ui_layer.add_child(larger)
     var restart_button := Button.new()
     restart_button.text = "↻"
-    restart_button.position = Vector2(890, 16)
-    restart_button.size = Vector2(52, 42)
+    restart_button.position = Vector2(866, 14)
+    restart_button.size = Vector2(48, 42)
     restart_button.pressed.connect(_restart_level)
     ui_layer.add_child(restart_button)
 
@@ -393,6 +426,9 @@ func _restart_level(reset_deaths := false) -> void:
     left_held = false
     right_held = false
     jump_held = false
+    touch_points.clear()
+    if is_instance_valid(player):
+        player.touch_control_active = false
     if reset_deaths:
         deaths = 0
     if is_instance_valid(player):
