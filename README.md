@@ -2,29 +2,45 @@
 
 **Simple look. Brutal gameplay.**
 
-Pixel Quest is an original 2D troll-platformer project built with Godot 4 for Android and the web. It uses original level concepts and does not copy another game's levels or assets.
+Pixel Quest is an original 2D troll-platformer built with Godot 4.4.1. The same source project targets two independent releases: a browser website and a standalone Android APK.
 
 ## Current status
 
-This repository is being initialized. The first milestone is a playable vertical slice with keyboard/touch controls, restart, death counter, one designed level, and export workflows. The 100-level campaign, audio, final art, and release builds require subsequent implementation and verification.
+The repository contains an early playable prototype and automated build workflows. The full 100-level campaign, final character art/animation, complete audio, and release QA are not yet complete.
 
-## Requirements
+## Run locally
 
-- Godot 4.x (use the version pinned in .github/workflows/build.yml)
-- Android export templates and Android SDK/JDK for local APK export
-
-## Run
-
-Open project.godot in Godot 4 and press Play.
+Open `project.godot` in Godot 4.4.1 and press Play.
 
 ## Controls
 
 - Desktop: A/D or Left/Right to move; Space/W/Up to jump; R to restart.
-- Touch: on-screen left, right, jump, and restart controls.
+- Touch: on-screen movement, jump, and restart controls where implemented.
 
-## Exports
+## Independent releases
 
-GitHub Actions builds a Web export and attempts an Android APK export. APK export requires compatible Android export templates and SDK configuration; check the Actions logs and artifacts before treating a build as release-ready.
+### Website
+
+- GitHub Actions exports the Godot Web build.
+- The website is deployed to GitHub Pages.
+- It runs in a compatible modern browser; no Android APK is needed.
+- After the first successful deployment, open the repository's **Settings → Pages** to confirm the published URL.
+
+### Android APK
+
+- A separate GitHub Actions job exports the Android APK.
+- The APK is uploaded as a separate workflow artifact named `pixel-quest-android-apk`.
+- Download it from the successful workflow run's **Artifacts** section.
+- The APK is not bundled into the website and the website does not install or launch it.
+
+## Build workflow
+
+Every push to `main` runs two independent jobs:
+
+1. **Website:** Godot import/smoke test → Web export → GitHub Pages deployment.
+2. **Android:** Android SDK/JDK setup → APK export → separate APK artifact.
+
+A failure in one job does not prevent the other job from running.
 
 ## Design principles
 
@@ -32,3 +48,4 @@ GitHub Actions builds a Web export and attempts an Android APK export. APK expor
 - Deterministic trap timing and clear counterplay.
 - Every level must have at least one verified solution before release.
 - No difficulty claims are treated as proven without playtesting.
+- Builds are not considered release-ready until the exported website and APK are tested on real target devices.
