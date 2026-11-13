@@ -10,6 +10,7 @@ var level_started := false
 var collapsed := false
 var collapse_timer := 0.0
 var moving_platform: StaticBody2D
+var crumble_platform: StaticBody2D
 var moving_direction := 1.0
 var moving_start_x := 520.0
 var moving_end_x := 690.0
@@ -88,6 +89,15 @@ func _build_level() -> void:
     _platform(Vector2(770, FLOOR_Y), Vector2(190, 70), Color("#6dbb58"))
 
     # A suspiciously safe-looking floor tile collapses after contact.
+    crumble_platform = StaticBody2D.new()
+    crumble_platform.position = Vector2(275, FLOOR_Y - 6)
+    var crumble_shape := CollisionShape2D.new()
+    var crumble_rect := RectangleShape2D.new()
+    crumble_rect.size = Vector2(24, 12)
+    crumble_shape.shape = crumble_rect
+    crumble_platform.add_child(crumble_shape)
+    add_child(crumble_platform)
+
     var crumble := Area2D.new()
     crumble.position = Vector2(275, FLOOR_Y - 8)
     crumble.add_to_group("crumble")
@@ -248,6 +258,9 @@ func _on_crumble_touched(body: Node2D) -> void:
         collapsed = true
         collapse_timer = 0.35
         player.controls_enabled = false
+        if is_instance_valid(crumble_platform):
+            crumble_platform.get_child(0).set_deferred("disabled", true)
+            crumble_platform.visible = false
         _show_message("THE FLOOR WASN'T SAFE!", 1.0)
         _play_tone(170.0, 0.13)
 
@@ -274,6 +287,9 @@ func _restart_level(reset_deaths := false) -> void:
     if is_instance_valid(player):
         player.queue_free()
     collapsed = false
+    if is_instance_valid(crumble_platform):
+        crumble_platform.visible = true
+        crumble_platform.get_child(0).set_deferred("disabled", false)
     moving_direction = 1.0
     if is_instance_valid(moving_platform):
         moving_platform.position.x = moving_start_x
