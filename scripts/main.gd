@@ -552,7 +552,10 @@ func _save_control_layout() -> void:
 
 func _spawn_player() -> void:
     player = PLAYER_SCRIPT.new() as PQPlayer
-    player.position = Vector2(70, FLOOR_Y - 45)
+    player.position = Vector2(70, FLOOR_Y - 14)
+    player.z_index = 20
+    player.visible = true
+    player.modulate = Color.WHITE
     var collision := CollisionShape2D.new()
     var shape := RectangleShape2D.new()
     shape.size = Vector2(18, 27)
