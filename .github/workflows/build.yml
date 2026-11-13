@@ -72,11 +72,14 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
 
       - name: Export Android APK
+        id: android_export
+        continue-on-error: true
         run: |
           mkdir -p build/android
           godot --headless --verbose --path . --export-release "Android" build/android/PixelQuest.apk
 
       - name: Upload Website and APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pixel-quest-web-and-android
@@ -84,3 +87,9 @@ jobs:
             build/web/
             build/android/PixelQuest.apk
           if-no-files-found: warn
+
+      - name: Fail clearly if Android export failed
+        if: steps.android_export.outcome != 'success'
+        run: |
+          echo "Android APK export failed. The Web build artifact was still uploaded for inspection."
+          exit 1
