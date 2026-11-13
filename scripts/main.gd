@@ -153,6 +153,7 @@ func _build_level() -> void:
     level_background.size = Vector2(WORLD_W, 540)
     level_background.z_index = -20
     add_child(level_background)
+    _fit_camera_to_scene()
     _draw_cloud(Vector2(170, 95))
     _draw_cloud(Vector2(650, 125))
     _draw_cloud(Vector2(835, 75))
@@ -345,7 +346,7 @@ func _layout_ui() -> void:
     if is_instance_valid(death_label):
         death_label.position = Vector2(24, 18)
     if is_instance_valid(message_label):
-        message_label.position = Vector2(12, 62 if compact else 14)
+        message_label.position = Vector2(12, 108 if compact else 14)
         message_label.size = Vector2(maxf(100.0, w - 24.0), 38)
         message_label.add_theme_font_size_override("font_size", 14 if compact else 17)
     var top_y: float = 66.0 if compact else 12.0
