@@ -35,6 +35,9 @@ var dragging_control := ""
 var drag_offset := Vector2.ZERO
 var control_config := ConfigFile.new()
 var touch_points: Dictionary = {}
+var custom_control_layout := false
+var editor_touch_index := -1
+var editor_touch_offset := Vector2.ZERO
 
 func _ready() -> void:
     _configure_viewport()
@@ -97,7 +100,37 @@ func _physics_process(_delta: float) -> void:
         _win_level()
 
 func _input(event: InputEvent) -> void:
-    # Track each finger independently for simultaneous Android touch controls.
+    # EDIT mode: drag a control with one finger without triggering gameplay.
+    if control_edit_mode:
+        if event is InputEventScreenTouch:
+            if event.pressed and editor_touch_index == -1:
+                for action in control_buttons:
+                    var button: Button = control_buttons[action]
+                    if button.get_global_rect().has_point(event.position):
+                        selected_control = action
+                        dragging_control = action
+                        editor_touch_index = event.index
+                        editor_touch_offset = button.position - event.position
+                        button.modulate = Color(1.0, 0.72, 0.28, 1.0)
+                        break
+            elif not event.pressed and event.index == editor_touch_index:
+                editor_touch_index = -1
+                dragging_control = ""
+                _save_control_layout()
+            return
+        if event is InputEventScreenDrag and event.index == editor_touch_index and dragging_control != "":
+            var dragged: Button = control_buttons[dragging_control]
+            var viewport_size := get_viewport().get_visible_rect().size
+            var next_position := event.position + editor_touch_offset
+            dragged.position = Vector2(
+                clampf(next_position.x, 0.0, maxf(0.0, viewport_size.x - dragged.size.x)),
+                clampf(next_position.y, 0.0, maxf(0.0, viewport_size.y - dragged.size.y))
+            )
+            control_positions[dragging_control] = dragged.position
+            _refresh_editor_highlight()
+            return
+
+    # Each finger is tracked independently, allowing move + jump together.
     if event is InputEventScreenTouch:
         if event.pressed:
             touch_points[event.index] = event.position
@@ -368,20 +401,25 @@ func _layout_ui() -> void:
     smaller.position = Vector2(larger.position.x - gap - small_w, top_y)
     edit_button.size = Vector2(edit_w, button_h)
     edit_button.position = Vector2(smaller.position.x - gap - edit_w, top_y)
-    var control_size: float = clampf(minf(w, h) * 0.16, 64.0, 92.0)
-    var bottom_y: float = h - control_size - 18.0
-    if control_buttons.has("move_left"):
-        var left_button: Button = control_buttons["move_left"]
-        left_button.size = Vector2(control_size, control_size)
-        left_button.position = Vector2(18.0, bottom_y)
-    if control_buttons.has("move_right"):
-        var right_button: Button = control_buttons["move_right"]
-        right_button.size = Vector2(control_size, control_size)
-        right_button.position = Vector2(28.0 + control_size, bottom_y)
-    if control_buttons.has("jump"):
-        var jump_button: Button = control_buttons["jump"]
-        jump_button.size = Vector2(control_size, control_size)
-        jump_button.position = Vector2(w - control_size - 18.0, bottom_y)
+    var default_size: float = clampf(minf(w, h) * 0.16, 64.0, 92.0)
+    var bottom_y: float = h - default_size - 18.0
+    var defaults := {
+        "move_left": Vector2(18.0, bottom_y),
+        "move_right": Vector2(28.0 + default_size, bottom_y),
+        "jump": Vector2(w - default_size - 18.0, bottom_y)
+    }
+    for action in control_buttons:
+        var control: Button = control_buttons[action]
+        if not custom_control_layout:
+            control.size = Vector2(default_size, default_size)
+            control.position = defaults[action]
+        else:
+            var normalized_position: Vector2 = control_positions.get(action, Vector2(0.0, 0.0))
+            control.position = Vector2(
+                clampf(normalized_position.x * w, 0.0, maxf(0.0, w - control.size.x)),
+                clampf(normalized_position.y * h, 0.0, maxf(0.0, h - control.size.y))
+            )
+    _refresh_editor_highlight()
 
 func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     var button := Button.new()
@@ -391,11 +429,47 @@ func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     button.size = Vector2(button_size, button_size)
     button.add_theme_font_size_override("font_size", 23 if action != "jump" else 18)
     button.focus_mode = Control.FOCUS_NONE
+    button.mouse_filter = Control.MOUSE_FILTER_STOP
+    _style_touch_button(button, action)
     button.button_down.connect(func(): _set_touch_action(action, true))
     button.button_up.connect(func(): _set_touch_action(action, false))
     button.gui_input.connect(_on_control_gui_input.bind(button, action))
     control_buttons[action] = button
     ui_layer.add_child(button)
+
+func _style_touch_button(button: Button, action: String) -> void:
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color("#26324a", 0.78)
+    normal.border_color = Color("#ffffff", 0.72)
+    normal.set_border_width_all(2)
+    normal.set_corner_radius_all(18)
+    normal.shadow_color = Color("#101827", 0.28)
+    normal.shadow_size = 5
+    normal.content_margin_left = 8
+    normal.content_margin_right = 8
+    normal.content_margin_top = 8
+    normal.content_margin_bottom = 8
+    var pressed := normal.duplicate() as StyleBoxFlat
+    pressed.bg_color = Color("#7656a8", 0.96)
+    pressed.border_color = Color("#ffd166")
+    var hover := normal.duplicate() as StyleBoxFlat
+    hover.bg_color = Color("#3c4d70", 0.92)
+    button.add_theme_stylebox_override("normal", normal)
+    button.add_theme_stylebox_override("pressed", pressed)
+    button.add_theme_stylebox_override("hover", hover)
+    button.add_theme_color_override("font_color", Color.WHITE)
+    button.add_theme_color_override("font_pressed_color", Color("#ffd166"))
+    button.add_theme_color_override("font_hover_color", Color.WHITE)
+
+func _refresh_editor_highlight() -> void:
+    for action in control_buttons:
+        var control: Button = control_buttons[action]
+        if control_edit_mode and action == selected_control:
+            control.modulate = Color(1.0, 0.72, 0.28, 1.0)
+        elif control_edit_mode:
+            control.modulate = Color(1.0, 0.88, 0.62, 1.0)
+        else:
+            control.modulate = Color.WHITE
 
 func _set_touch_action(action: String, pressed: bool) -> void:
     if control_edit_mode:
@@ -417,10 +491,9 @@ func _toggle_control_editor() -> void:
     jump_held = false
     selected_control = ""
     dragging_control = ""
-    for action in control_buttons:
-        var button: Button = control_buttons[action]
-        button.modulate = Color(1.0, 0.82, 0.45, 1.0) if control_edit_mode else Color.WHITE
-    _show_message("DRAG BUTTONS • SELECT ONE, THEN USE A− / A+ • EDIT TO SAVE" if control_edit_mode else "CONTROLS SAVED", 2.5)
+    editor_touch_index = -1
+    _refresh_editor_highlight()
+    _show_message("DRAG BUTTONS • TAP ONE, THEN USE A− / A+ • EDIT TO SAVE" if control_edit_mode else "CONTROLS SAVED", 2.5)
     if not control_edit_mode:
         _save_control_layout()
 
@@ -454,19 +527,26 @@ func _on_control_gui_input(event: InputEvent, button: Button, action: String) ->
 
 func _load_control_layout() -> void:
     control_config.load("user://pixel_quest_controls.cfg")
+    custom_control_layout = bool(control_config.get_value("controls", "customized", false))
     for action in ["move_left", "move_right", "jump"]:
-        var saved_position = control_config.get_value("controls", action + "_position", null)
-        if saved_position is Vector2:
-            control_positions[action] = saved_position
+        var normalized_position = control_config.get_value("controls", action + "_normalized_position", null)
+        if normalized_position is Vector2:
+            control_positions[action] = normalized_position
         control_sizes[action] = float(control_config.get_value("controls", action + "_size", 76.0))
 
 func _save_control_layout() -> void:
+    var viewport_size := get_viewport().get_visible_rect().size
+    if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+        return
+    custom_control_layout = true
     for action in control_buttons:
         var button: Button = control_buttons[action]
-        control_positions[action] = button.position
+        var normalized_position := Vector2(button.position.x / viewport_size.x, button.position.y / viewport_size.y)
+        control_positions[action] = normalized_position
         control_sizes[action] = button.size.x
-        control_config.set_value("controls", action + "_position", button.position)
+        control_config.set_value("controls", action + "_normalized_position", normalized_position)
         control_config.set_value("controls", action + "_size", button.size.x)
+    control_config.set_value("controls", "customized", true)
     control_config.save("user://pixel_quest_controls.cfg")
 
 func _spawn_player() -> void:
@@ -516,6 +596,7 @@ func _restart_level(reset_deaths := false) -> void:
     right_held = false
     jump_held = false
     touch_points.clear()
+    editor_touch_index = -1
     if is_instance_valid(player):
         player.touch_control_active = false
     if reset_deaths:
