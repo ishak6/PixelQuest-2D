@@ -43,6 +43,16 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
 
+      - name: Verify Android toolchain and export templates
+        run: |
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -d "$ANDROID_HOME/build-tools"
+          find "$ANDROID_HOME/build-tools" -name apksigner -type f -print -quit | grep -q .
+          test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk"
+          test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_release.apk"
+          echo "Android SDK, Java, APK signer and Godot templates are present."
+
       - name: Validate project and import resources
         run: godot --headless --editor --path . --quit
 
