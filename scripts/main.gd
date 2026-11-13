@@ -276,8 +276,9 @@ func _on_finish_entered(body: Node2D) -> void:
         _win_level()
 
 func _player_died() -> void:
-    if not is_instance_valid(player):
+    if not is_instance_valid(player) or not player.controls_enabled:
         return
+    player.controls_enabled = false
     deaths += 1
     death_label.text = "LEVEL 01   •   DEATHS %d" % deaths
     _show_message("OOPS. TRY AGAIN.", 0.8)
