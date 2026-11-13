@@ -136,7 +136,7 @@ func _draw() -> void:
         shadow_alpha = 0.12
     draw_rect(Rect2(-shadow_width * 0.5, 4, shadow_width, 3), Color(INK, shadow_alpha))
 
-    draw_set_transform(Vector2(0.0, bob), tilt, Vector2(1.0 + squash * 0.35, 1.0 - squash))
+    draw_set_transform(Vector2(0.0, bob), tilt, Vector2(1.5 + squash * 0.35, 1.5 - squash))
 
     # Run dust and landing pixels.
     if animation_state == "run" and int(run_phase * 2.0) % 3 == 0:
