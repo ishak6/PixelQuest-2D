@@ -1,12 +1,60 @@
-name: Pixel Quest Builds
+name: Pixel Quest - Website and Android
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pixel-quest-pages
+  cancel-in-progress: true
+
 jobs:
-  export:
+  website:
+    name: Build and deploy Website
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Godot 4.4.1
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: true
+
+      - name: Validate project and import resources
+        run: godot --headless --editor --path . --quit
+
+      - name: Smoke test startup
+        run: timeout 20s godot --headless --path . --quit-after 5
+
+      - name: Export Website
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -s build/web/index.html
+
+      - name: Upload Website artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy Website to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  android:
+    name: Build standalone Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,69 +75,51 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
 
       - name: Configure Godot Android SDK paths
+        shell: bash
         run: |
           mkdir -p "$HOME/.config/godot"
           cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
           [resource]
-          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          export/android/android_sdk_path = "$ANDROID_HOME"
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
 
-      - name: Verify Android toolchain and export templates
+      - name: Verify Android toolchain
         run: |
           test -x "$JAVA_HOME/bin/java"
           test -x "$ANDROID_HOME/platform-tools/adb"
-          test -d "$ANDROID_HOME/build-tools"
-          find "$ANDROID_HOME/build-tools" -name apksigner -type f -print -quit | grep -q .
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
           test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk"
           test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_release.apk"
-          echo "Android SDK, Java, APK signer and Godot templates are present."
 
       - name: Validate project and import resources
         run: godot --headless --editor --path . --quit
 
-      - name: Smoke test startup
-        run: timeout 20s godot --headless --path . --quit-after 5
-
-      - name: Export Web build
-        run: |
-          mkdir -p build/web
-          godot --headless --path . --export-release "Web" build/web/index.html
-
-      - name: Create CI debug keystore
+      - name: Create temporary CI debug keystore
+        shell: bash
         run: |
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/pixelquest-debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/pixelquest-debug.keystore" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
 
-      - name: Export Android APK
-        id: android_export
-        continue-on-error: true
+      - name: Export standalone APK
         run: |
           mkdir -p build/android
-          godot --headless --verbose --path . --export-release "Android" build/android/PixelQuest.apk
+          godot --headless --verbose --path . --export-debug "Android" build/android/PixelQuest.apk
+          test -s build/android/PixelQuest.apk
 
-      - name: Upload Website and APK
-        if: always()
+      - name: Upload standalone Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: pixel-quest-web-and-android
-          path: |
-            build/web/
-            build/android/PixelQuest.apk
-          if-no-files-found: warn
-
-      - name: Fail clearly if Android export failed
-        if: steps.android_export.outcome != 'success'
-        run: |
-          echo "Android APK export failed. The Web build artifact was still uploaded for inspection."
-          exit 1
+          name: pixel-quest-android-apk
+          path: build/android/PixelQuest.apk
+          if-no-files-found: error
+          retention-days: 30
