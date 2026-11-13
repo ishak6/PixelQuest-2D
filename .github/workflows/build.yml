@@ -32,6 +32,9 @@ jobs:
           use-dotnet: false
           include-templates: true
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Validate project and import resources
         run: godot --headless --editor --path . --quit
 
