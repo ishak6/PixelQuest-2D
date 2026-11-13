@@ -11,6 +11,7 @@ var collapsed := false
 var collapse_timer := 0.0
 var moving_platform: StaticBody2D
 var crumble_platform: StaticBody2D
+var crumble_visual: ColorRect
 var moving_direction := 1.0
 var moving_start_x := 520.0
 var moving_end_x := 690.0
@@ -108,11 +109,11 @@ func _build_level() -> void:
     crumble.add_child(cshape)
     crumble.body_entered.connect(_on_crumble_touched)
     add_child(crumble)
-    var cvisual := ColorRect.new()
-    cvisual.position = Vector2(263, FLOOR_Y - 14)
-    cvisual.size = Vector2(24, 7)
-    cvisual.color = Color("#b5df76")
-    add_child(cvisual)
+    crumble_visual = ColorRect.new()
+    crumble_visual.position = Vector2(263, FLOOR_Y - 14)
+    crumble_visual.size = Vector2(24, 7)
+    crumble_visual.color = Color("#b5df76")
+    add_child(crumble_visual)
 
     _spikes(Vector2(360, FLOOR_Y - 16), 54)
     _spikes(Vector2(700, FLOOR_Y - 16), 48)
@@ -261,6 +262,8 @@ func _on_crumble_touched(body: Node2D) -> void:
         if is_instance_valid(crumble_platform):
             crumble_platform.get_child(0).set_deferred("disabled", true)
             crumble_platform.visible = false
+        if is_instance_valid(crumble_visual):
+            crumble_visual.visible = false
         _show_message("THE FLOOR WASN'T SAFE!", 1.0)
         _play_tone(170.0, 0.13)
 
@@ -290,6 +293,8 @@ func _restart_level(reset_deaths := false) -> void:
     if is_instance_valid(crumble_platform):
         crumble_platform.visible = true
         crumble_platform.get_child(0).set_deferred("disabled", false)
+    if is_instance_valid(crumble_visual):
+        crumble_visual.visible = true
     moving_direction = 1.0
     if is_instance_valid(moving_platform):
         moving_platform.position.x = moving_start_x
