@@ -2,15 +2,17 @@ extends CharacterBody2D
 class_name PQPlayer
 
 signal died
+signal death_animation_finished
 
 const SPEED := 285.0
 const JUMP_VELOCITY := -560.0
 const GRAVITY := 1450.0
 
-const INK := Color("#26324a")
+const INK := Color("#172033")
+const HAIR := Color("#8b5a3c")
 const SKIN := Color("#ffd6a5")
-const SHIRT := Color("#06a6a6")
-const SCARF := Color("#ef476f")
+const SHIRT := Color("#243b64")
+const SCARF := Color("#e63946")
 const GOLD := Color("#ffd166")
 const WHITE := Color("#fff8e8")
 
@@ -29,6 +31,8 @@ var run_phase := 0.0
 var blink_timer := 0.0
 var blink_cooldown := 2.4
 var jump_flash := 0.0
+var dying := false
+var death_elapsed := 0.0
 
 func _ready() -> void:
     was_on_floor = is_on_floor()
@@ -36,6 +40,14 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
     animation_time += delta
+    if dying:
+        death_elapsed += delta
+        animation_state = "death"
+        queue_redraw()
+        if death_elapsed >= 0.42:
+            dying = false
+            death_animation_finished.emit()
+        return
     landing_timer = maxf(0.0, landing_timer - delta)
     jump_flash = maxf(0.0, jump_flash - delta)
 
@@ -60,8 +72,16 @@ func _process(delta: float) -> void:
 
     queue_redraw()
 
+func begin_death() -> void:
+    if dying:
+        return
+    dying = true
+    controls_enabled = false
+    death_elapsed = 0.0
+    animation_state = "death"
+
 func _physics_process(delta: float) -> void:
-    if not controls_enabled:
+    if not controls_enabled or dying:
         velocity = Vector2.ZERO
         return
 
@@ -127,6 +147,12 @@ func _draw() -> void:
             bob = 2.0 * (landing_timer / 0.16)
             arm_swing = 2.0
             scarf_wave = 2.0
+        "death":
+            tilt = 1.15 * float(facing)
+            arm_spread = 8.0
+            leg_lift = 3.0
+            squash = 0.16
+            scarf_wave = -7.0
 
     # Ground shadow compresses while airborne to reinforce jump height.
     var shadow_width := 22.0
@@ -136,7 +162,7 @@ func _draw() -> void:
         shadow_alpha = 0.12
     draw_rect(Rect2(-shadow_width * 0.5, 4, shadow_width, 3), Color(INK, shadow_alpha))
 
-    draw_set_transform(Vector2(0.0, bob), tilt, Vector2(1.5 + squash * 0.35, 1.5 - squash))
+    draw_set_transform(Vector2(0.0, bob), tilt, Vector2(1.0 + squash * 0.2, 1.0 - squash))
 
     # Run dust and landing pixels.
     if animation_state == "run" and int(run_phase * 2.0) % 3 == 0:
@@ -177,9 +203,13 @@ func _draw() -> void:
     # Head, layered hair and ears.
     draw_rect(Rect2(-10, -32, 20, 17), INK)
     draw_rect(Rect2(-8, -30, 16, 14), SKIN)
-    draw_rect(Rect2(-10, -33, 20, 7), INK)
-    draw_rect(Rect2(-8, -34, 6, 3), INK)
-    draw_rect(Rect2(2, -34, 6, 3), INK)
+    draw_rect(Rect2(-10, -33, 20, 7), HAIR)
+    draw_rect(Rect2(-8, -34, 6, 3), HAIR)
+    draw_rect(Rect2(2, -34, 6, 3), HAIR)
+    draw_rect(Rect2(-8, -37, 5, 5), HAIR)
+    draw_rect(Rect2(-2, -39, 5, 7), HAIR)
+    draw_rect(Rect2(4, -36, 5, 4), HAIR)
+    draw_rect(Rect2(-7, -32, 3, 2), Color("#b47a51"))
     draw_rect(Rect2(-11, -27, 3, 5), Color("#f2b98f"))
     draw_rect(Rect2(8, -27, 3, 5), Color("#f2b98f"))
 
