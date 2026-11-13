@@ -9,21 +9,25 @@ const GRAVITY := 1450.0
 
 var controls_enabled := true
 var facing := 1
+var move_input := 0.0
+var jump_requested := false
 
 func _physics_process(delta: float) -> void:
     if not controls_enabled:
         velocity = Vector2.ZERO
         return
 
-    var direction := Input.get_axis("move_left", "move_right")
+    var keyboard_direction := Input.get_axis("move_left", "move_right")
+    var direction := move_input if move_input != 0.0 else keyboard_direction
     if direction != 0.0:
         facing = sign(direction)
     velocity.x = direction * SPEED
 
     if not is_on_floor():
         velocity.y += GRAVITY * delta
-    elif Input.is_action_just_pressed("jump"):
+    elif jump_requested or Input.is_action_just_pressed("jump"):
         velocity.y = JUMP_VELOCITY
+    jump_requested = false
 
     move_and_slide()
 
