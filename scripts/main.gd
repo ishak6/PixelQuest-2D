@@ -562,6 +562,7 @@ func _spawn_player() -> void:
     collision.shape = shape
     player.add_child(collision)
     player.died.connect(_player_died)
+    player.death_animation_finished.connect(_finish_player_death)
     add_child(player)
 
 func _on_crumble_touched(body: Node2D) -> void:
@@ -586,9 +587,13 @@ func _on_finish_entered(body: Node2D) -> void:
         _win_level()
 
 func _player_died() -> void:
-    if not is_instance_valid(player) or not player.controls_enabled:
+    if not is_instance_valid(player) or player.dying:
         return
-    player.controls_enabled = false
+    player.begin_death()
+
+func _finish_player_death() -> void:
+    if not is_instance_valid(player):
+        return
     deaths += 1
     death_label.text = "LEVEL 01   •   DEATHS %d" % deaths
     _show_message("OOPS. TRY AGAIN.", 0.8)
