@@ -27,6 +27,15 @@ var left_held := false
 var right_held := false
 var jump_held := false
 var audio_player: AudioStreamPlayer
+var sound_enabled := true
+var sound_button: Button
+var pause_button: Button
+var pause_overlay: ColorRect
+var pause_card: ColorRect
+var pause_title: Label
+var resume_button: Button
+var pause_restart_button: Button
+var game_paused := false
 var control_buttons: Dictionary = {}
 var control_positions: Dictionary = {}
 var control_sizes: Dictionary = {}
@@ -41,6 +50,9 @@ var editor_touch_index := -1
 var editor_touch_offset := Vector2.ZERO
 
 func _ready() -> void:
+    var settings := ConfigFile.new()
+    if settings.load("user://pixel_quest_settings.cfg") == OK:
+        sound_enabled = bool(settings.get_value("audio", "sfx_enabled", true))
     _configure_viewport()
     get_viewport().size_changed.connect(_on_viewport_resized)
     _setup_input()
@@ -76,8 +88,10 @@ func _fit_camera_to_scene() -> void:
         level_background.size = visible_world_size
 
 func _process(delta: float) -> void:
-    if Input.is_action_just_pressed("restart"):
+    if Input.is_action_just_pressed("restart") and not game_paused:
         _restart_level()
+    if game_paused:
+        return
     if collapsed:
         collapse_timer -= delta
         if collapse_timer <= 0.0:
@@ -91,7 +105,7 @@ func _process(delta: float) -> void:
             moving_direction = 1.0
 
 func _physics_process(_delta: float) -> void:
-    if not is_instance_valid(player) or level_won:
+    if not is_instance_valid(player) or level_won or game_paused:
         return
     player.move_input = float(right_held) - float(left_held)
     player.touch_control_active = left_held or right_held or jump_held
@@ -358,6 +372,20 @@ func _build_ui() -> void:
     larger.pressed.connect(func(): _resize_selected_control(8.0))
     ui_layer.add_child(larger)
     utility_buttons["larger"] = larger
+    sound_button = Button.new()
+    sound_button.text = "SFX ON" if sound_enabled else "SFX OFF"
+    sound_button.focus_mode = Control.FOCUS_NONE
+    sound_button.pressed.connect(_toggle_sound)
+    ui_layer.add_child(sound_button)
+    utility_buttons["sound"] = sound_button
+
+    pause_button = Button.new()
+    pause_button.text = "Ⅱ"
+    pause_button.focus_mode = Control.FOCUS_NONE
+    pause_button.pressed.connect(_toggle_pause)
+    ui_layer.add_child(pause_button)
+    utility_buttons["pause"] = pause_button
+
     var restart_button := Button.new()
     restart_button.text = "↻"
     restart_button.position = Vector2(866, 14)
@@ -365,6 +393,7 @@ func _build_ui() -> void:
     restart_button.pressed.connect(_restart_level)
     ui_layer.add_child(restart_button)
     utility_buttons["restart"] = restart_button
+    _build_pause_overlay()
     _layout_ui()
 
 func _layout_ui() -> void:
@@ -385,15 +414,19 @@ func _layout_ui() -> void:
         message_label.add_theme_font_size_override("font_size", 14 if compact else 17)
     var top_y: float = 66.0 if compact else 12.0
     var button_h: float = 38.0 if compact else 42.0
-    var restart_w: float = 44.0
-    var edit_w: float = 58.0 if compact else 64.0
-    var small_w: float = 38.0 if compact else 42.0
+    var restart_w: float = 40.0 if compact else 44.0
+    var edit_w: float = 54.0 if compact else 64.0
+    var small_w: float = 34.0 if compact else 42.0
+    var sound_w: float = 54.0 if compact else 64.0
+    var pause_w: float = 34.0 if compact else 42.0
     var gap: float = 5.0
     var right_edge: float = w - 12.0
     var restart_button: Button = utility_buttons["restart"]
     var larger: Button = utility_buttons["larger"]
     var smaller: Button = utility_buttons["smaller"]
     var edit_button: Button = utility_buttons["edit"]
+    var sound: Button = utility_buttons["sound"]
+    var pause: Button = utility_buttons["pause"]
     restart_button.size = Vector2(restart_w, button_h)
     restart_button.position = Vector2(right_edge - restart_w, top_y)
     larger.size = Vector2(small_w, button_h)
@@ -402,6 +435,13 @@ func _layout_ui() -> void:
     smaller.position = Vector2(larger.position.x - gap - small_w, top_y)
     edit_button.size = Vector2(edit_w, button_h)
     edit_button.position = Vector2(smaller.position.x - gap - edit_w, top_y)
+    sound.size = Vector2(sound_w, button_h)
+    sound.position = Vector2(edit_button.position.x - gap - sound_w, top_y)
+    sound.add_theme_font_size_override("font_size", 11 if compact else 13)
+    pause.size = Vector2(pause_w, button_h)
+    pause.position = Vector2(sound.position.x - gap - pause_w, top_y)
+    if is_instance_valid(pause_overlay):
+        _layout_pause_overlay(viewport_size)
     var default_size: float = clampf(minf(w, h) * 0.16, 64.0, 92.0)
     var bottom_y: float = h - default_size - 18.0
     var defaults := {
@@ -421,6 +461,72 @@ func _layout_ui() -> void:
                 clampf(normalized_position.y * h, 0.0, maxf(0.0, h - control.size.y))
             )
     _refresh_editor_highlight()
+
+func _build_pause_overlay() -> void:
+    pause_overlay = ColorRect.new()
+    pause_overlay.color = Color(0.04, 0.07, 0.12, 0.78)
+    pause_overlay.visible = false
+    pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    pause_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_layer.add_child(pause_overlay)
+
+    pause_card = ColorRect.new()
+    pause_card.color = Color("#26324a")
+    pause_overlay.add_child(pause_card)
+
+    pause_title = Label.new()
+    pause_title.text = "PAUSED"
+    pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    pause_title.add_theme_font_size_override("font_size", 28)
+    pause_title.add_theme_color_override("font_color", Color.WHITE)
+    pause_card.add_child(pause_title)
+
+    resume_button = Button.new()
+    resume_button.text = "RESUME"
+    resume_button.pressed.connect(_toggle_pause)
+    pause_card.add_child(resume_button)
+
+    pause_restart_button = Button.new()
+    pause_restart_button.text = "RESTART LEVEL"
+    pause_restart_button.pressed.connect(func():
+        _toggle_pause()
+        _restart_level()
+    )
+    pause_card.add_child(pause_restart_button)
+
+func _layout_pause_overlay(viewport_size: Vector2) -> void:
+    var card_size := Vector2(minf(340.0, viewport_size.x - 32.0), 220.0)
+    var origin := (viewport_size - card_size) * 0.5
+    pause_card.position = origin
+    pause_card.size = card_size
+    pause_title.position = Vector2(12.0, 24.0)
+    pause_title.size = Vector2(card_size.x - 24.0, 42.0)
+    resume_button.position = Vector2(24.0, 92.0)
+    resume_button.size = Vector2(card_size.x - 48.0, 42.0)
+    pause_restart_button.position = Vector2(24.0, 146.0)
+    pause_restart_button.size = Vector2(card_size.x - 48.0, 42.0)
+
+func _toggle_pause() -> void:
+    if level_won or not is_instance_valid(player):
+        return
+    game_paused = not game_paused
+    player.controls_enabled = not game_paused
+    pause_overlay.visible = game_paused
+    pause_button.text = "▶" if game_paused else "Ⅱ"
+    if game_paused:
+        left_held = false
+        right_held = false
+        jump_held = false
+        touch_points.clear()
+
+func _toggle_sound() -> void:
+    sound_enabled = not sound_enabled
+    sound_button.text = "SFX ON" if sound_enabled else "SFX OFF"
+    var settings := ConfigFile.new()
+    settings.set_value("audio", "sfx_enabled", sound_enabled)
+    settings.save("user://pixel_quest_settings.cfg")
+    if sound_enabled:
+        _play_tone(520.0, 0.06)
 
 func _touch_button(caption: String, pos: Vector2, action: String) -> void:
     var button := Button.new()
@@ -602,6 +708,11 @@ func _finish_player_death() -> void:
     _restart_level(false)
 
 func _restart_level(reset_deaths := false) -> void:
+    game_paused = false
+    if is_instance_valid(pause_overlay):
+        pause_overlay.visible = false
+    if is_instance_valid(pause_button):
+        pause_button.text = "Ⅱ"
     level_won = false
     left_held = false
     right_held = false
@@ -643,20 +754,26 @@ func _show_message(value: String, duration: float) -> void:
         )
 
 func _play_tone(frequency: float, duration: float) -> void:
-    # Lightweight generated sound: no external audio asset required.
-    if not is_instance_valid(audio_player):
-        audio_player = AudioStreamPlayer.new()
-        var generator := AudioStreamGenerator.new()
-        generator.mix_rate = 22050
-        generator.buffer_length = 0.25
-        audio_player.stream = generator
-        add_child(audio_player)
-        audio_player.play()
-    var playback := audio_player.get_stream_playback() as AudioStreamGeneratorPlayback
-    if playback == null:
+    if not sound_enabled:
         return
-    var frames := int(22050.0 * duration)
+    # Build a short PCM sound effect; no downloaded audio assets are required.
+    var sample_rate := 22050
+    var frames := maxi(1, int(sample_rate * duration))
+    var stream := AudioStreamWAV.new()
+    stream.format = AudioStreamWAV.FORMAT_16_BITS
+    stream.mix_rate = sample_rate
+    stream.stereo = false
+    var samples := PackedByteArray()
+    samples.resize(frames * 2)
     for i in frames:
-        var envelope := 1.0 - float(i) / frames
-        var sample := sin(TAU * frequency * float(i) / 22050.0) * envelope * 0.16
-        playback.push_frame(Vector2(sample, sample))
+        var t := float(i) / float(sample_rate)
+        var envelope := pow(1.0 - float(i) / float(frames), 1.7)
+        var fade_in := minf(1.0, float(i) / 32.0)
+        var sample := sin(TAU * frequency * t) * envelope * fade_in * 0.24
+        samples.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 32767.0))
+    stream.data = samples
+    var one_shot := AudioStreamPlayer.new()
+    one_shot.stream = stream
+    one_shot.finished.connect(one_shot.queue_free)
+    add_child(one_shot)
+    one_shot.play()
