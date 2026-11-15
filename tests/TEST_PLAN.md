@@ -20,3 +20,9 @@
 
 ## Release gate
 Do not call the game complete until all manual checks pass on a real Android device and in at least one desktop browser. CI success alone does not prove gameplay quality.
+
+## Recent regression checks
+- [ ] Victory triggers once even when both exit overlap and boundary checks fire.
+- [ ] Victory tone and clear message play once, not every physics frame.
+- [ ] Player death cannot override a completed level.
+- [ ] Restart returns the level to a playable state and clears the victory lock.
