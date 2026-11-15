@@ -3,6 +3,8 @@ class_name PQPlayer
 
 signal died
 signal death_animation_finished
+signal jumped
+signal landed
 
 const SPEED := 285.0
 const JUMP_VELOCITY := -560.0
@@ -120,6 +122,7 @@ func _physics_process(delta: float) -> void:
     elif jump_requested or Input.is_action_just_pressed("jump"):
         velocity.y = JUMP_VELOCITY
         jump_flash = 0.16
+        jumped.emit()
 
     jump_requested = false
     move_and_slide()
@@ -128,6 +131,7 @@ func _physics_process(delta: float) -> void:
     if on_floor_now and not was_on_floor and velocity.y >= 0.0:
         landing_timer = 0.22
         landing_burst = 0.18
+        landed.emit()
     was_on_floor = on_floor_now
 
     for i in get_slide_collision_count():
