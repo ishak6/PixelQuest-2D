@@ -115,6 +115,8 @@ func _physics_process(_delta: float) -> void:
         _win_level()
 
 func _input(event: InputEvent) -> void:
+    if game_paused:
+        return
     # EDIT mode: drag a control with one finger without triggering gameplay.
     if control_edit_mode:
         if event is InputEventScreenTouch:
@@ -670,7 +672,15 @@ func _spawn_player() -> void:
     player.add_child(collision)
     player.died.connect(_player_died)
     player.death_animation_finished.connect(_finish_player_death)
+    player.jumped.connect(_on_player_jumped)
+    player.landed.connect(_on_player_landed)
     add_child(player)
+
+func _on_player_jumped() -> void:
+    _play_tone(480.0, 0.075)
+
+func _on_player_landed() -> void:
+    _play_tone(235.0, 0.065)
 
 func _on_crumble_touched(body: Node2D) -> void:
     if body == player and not collapsed:
