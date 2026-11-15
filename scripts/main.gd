@@ -7,6 +7,7 @@ const FLOOR_Y := 470.0
 var player: PQPlayer
 var deaths := 0
 var level_started := false
+var level_won := false
 var collapsed := false
 var collapse_timer := 0.0
 var moving_platform: StaticBody2D
@@ -82,7 +83,7 @@ func _process(delta: float) -> void:
         if collapse_timer <= 0.0:
             collapsed = false
             _restart_level()
-    if is_instance_valid(moving_platform):
+    if is_instance_valid(moving_platform) and not level_won:
         moving_platform.position.x += moving_direction * 95.0 * delta
         if moving_platform.position.x > moving_end_x:
             moving_direction = -1.0
@@ -90,13 +91,13 @@ func _process(delta: float) -> void:
             moving_direction = 1.0
 
 func _physics_process(_delta: float) -> void:
-    if not is_instance_valid(player):
+    if not is_instance_valid(player) or level_won:
         return
     player.move_input = float(right_held) - float(left_held)
     player.touch_control_active = left_held or right_held or jump_held
     if player.global_position.y > 650:
         _player_died()
-    if player.global_position.x > 910 and player.global_position.y < 460:
+    if not player.dying and player.global_position.x > 910 and player.global_position.y < 460:
         _win_level()
 
 func _input(event: InputEvent) -> void:
@@ -583,16 +584,16 @@ func _on_spike_entered(body: Node2D) -> void:
         _player_died()
 
 func _on_finish_entered(body: Node2D) -> void:
-    if body == player:
+    if body == player and not player.dying:
         _win_level()
 
 func _player_died() -> void:
-    if not is_instance_valid(player) or player.dying:
+    if level_won or not is_instance_valid(player) or player.dying:
         return
     player.begin_death()
 
 func _finish_player_death() -> void:
-    if not is_instance_valid(player):
+    if level_won or not is_instance_valid(player):
         return
     deaths += 1
     death_label.text = "LEVEL 01   •   DEATHS %d" % deaths
@@ -601,6 +602,7 @@ func _finish_player_death() -> void:
     _restart_level(false)
 
 func _restart_level(reset_deaths := false) -> void:
+    level_won = false
     left_held = false
     right_held = false
     jump_held = false
@@ -625,8 +627,9 @@ func _restart_level(reset_deaths := false) -> void:
     death_label.text = "LEVEL 01   •   DEATHS %d" % deaths
 
 func _win_level() -> void:
-    if not is_instance_valid(player):
+    if level_won or not is_instance_valid(player) or player.dying:
         return
+    level_won = true
     player.controls_enabled = false
     _show_message("LEVEL CLEAR!  •  R = RESTART", 999.0)
     _play_tone(660.0, 0.35)
